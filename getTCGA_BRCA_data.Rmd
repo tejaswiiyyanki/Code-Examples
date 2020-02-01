@@ -1,0 +1,55 @@
+---
+title: "Download TCGA Data with R"
+author: "Tejaswi S Iyyanki"
+date: "2/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+Download Breast cancer RNASeq data from patient tumors (TCGA - The cancer genome atlas) using GDCquery 
+
+```{r Download Breast Cancer TCGA Data, echo=TRUE}
+library(TCGAbiolinks)
+library(SummarizedExperiment)
+
+# Query platform Illumina HiSeq for TCGA-BRCA
+query <- GDCquery(project = "TCGA-BRCA",data.category = "Transcriptome Profiling",data.type = "Gene Expression Quantification",workflow.type="HTSeq - FPKM")
+
+GDCdownload(query)
+
+se <- GDCprepare(query,save=TRUE,save.filename = "BRCAdataGeneExpression_summarized.rda",summarizedExperiment = TRUE)
+
+
+```
+
+## Start from loading the saved Breast cancer data. Separate tumor tissues from normal tissue.
+
+```{r Load Breast Cancer Data, echo=TRUE}
+
+se <- get(load("BRCAdataGeneExpression_summarized.rda"))
+## get gene Expression values from summarized format!!
+geneExp <- SummarizedExperiment::assay(se)
+
+rownames(geneExp)=rowRanges(se)$external_gene_name
+dim(geneExp)
+
+geneExp_T=geneExp[,which(se$definition=="Primary solid Tumor")]
+geneExp_N=geneExp[,which(se$definition=="Solid Tissue Normal")]
+
+dim(geneExp_T)
+dim(geneExp_N)
+
+head(geneExp_T)[,1:5]
+
+#Export this into a tab-delimtted file
+write.table(geneExp_T,"TCGA_BRCA_Tumor_RSEM_GeneExp.tsv",sep="\t",quote = F, col.names = T, row.names = T)
+write.table(geneExp_N,"TCGA_BRCA_Normal_RSEM_GeneExp.tsv",sep="\t",quote = F, col.names = T, row.names = T)
+
+```
+
+
