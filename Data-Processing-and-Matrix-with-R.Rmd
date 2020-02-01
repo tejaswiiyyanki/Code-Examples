@@ -1,0 +1,113 @@
+---
+title: "Process TCGA BRCA RNASeq Data and Visualize"
+author: "Tejaswi S Iyyanki"
+date: "2/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r silent calling libraries, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+require("preprocessCore")
+```
+
+## Process Breast Cancer RNASeq Data
+
+```{r Open data and process, echo=TRUE}
+
+geneExp_T=read.csv(file = "../TCGA_BRCA_Tumor_RSEM_GeneExp.tsv", header = T, sep = "\t", as.is = T, row.names = NULL)
+
+geneExp_T[1:5,1:5]
+
+geneExp_T_m=as.matrix(geneExp_T[,2:ncol(geneExp_T)])
+rownames(geneExp_T_m)=geneExp_T$row.names
+
+#Now it is a matrix format
+geneExp_T_m[1:5,1:5]
+
+#Size of matrix
+dim(geneExp_T_m)
+
+#Filter out Protein-coding genes
+ENSEMBL_annotations=read.csv("Homo_sapiens.GRCh37.87_Annotations.txt",
+                             header=FALSE,sep=" ",stringsAsFactors = F)
+ENSEMBL_annotations_prot=unique(ENSEMBL_annotations[ENSEMBL_annotations$V3=="protein_coding",])
+
+geneExp_T_m_prot=subset(geneExp_T_m,rownames(geneExp_T_m) %in% ENSEMBL_annotations_prot$V2)
+#Now we have gene matrix (rows) consisting of protein-coding ONLY
+dim(geneExp_T_m_prot)
+head(geneExp_T_m_prot)[,1:5]
+
+```
+
+## Filter the Data and Clean up the matrix
+
+```{r Filter Data, echo=TRUE}
+
+#Remove <2 TPM genes; Only retain rows (genes) that show atleast 20% of columns (patients) have TPM values > 2.
+TCGA_only_f1=geneExp_T_m_prot
+TCGA_only_f1=geneExp_T_m_prot[(rowSums(geneExp_T_m_prot>2)>=as.integer(0.2*ncol(geneExp_T_m_prot))),] 
+dim(TCGA_only_f1) 
+TCGA_only_f1[1:5,1:5]
+
+#Quantile Normalize data
+TCGA_only_f1_prot_QN=normalize.quantiles(TCGA_only_f1)
+row.names(TCGA_only_f1_prot_QN)=row.names(TCGA_only_f1)
+colnames(TCGA_only_f1_prot_QN)=colnames(TCGA_only_f1)
+TCGA_only_f1_prot_QN[1:5,1:5]
+
+#Log2 transform data
+TCGA_only_f1_prot_QN_l2=log2(TCGA_only_f1_prot_QN+1)
+TCGA_only_f1_prot_QN_l2[1:5,1:5]
+
+#Mean-normalize matrix
+TCGA_only_f1_prot_QN_l2_m=TCGA_only_f1_prot_QN_l2-apply(TCGA_only_f1_prot_QN_l2,1,mean)
+TCGA_only_f1_prot_QN_l2_m[1:5,1:5]
+
+#Get top5K variable genes
+var_TCGA_only=apply(TCGA_only_f1_prot_QN_l2, 1, var)
+TCGA_only_f1_prot_QN_l2_5K=TCGA_only_f1_prot_QN_l2[order(var_TCGA_only, decreasing=TRUE)[1:5000],]
+TCGA_only_f1_prot_QN_l2_m_5K=TCGA_only_f1_prot_QN_l2_m[order(var_TCGA_only, decreasing=TRUE)[1:5000],]
+
+#Most variable genes (top 25)
+sort(var_TCGA_only, decreasing=TRUE)[1:25]
+```
+
+## Visualize the matrix as a heatmap to see how the features (gene expression as rows) define the subtypes of Breast Cancers 
+
+*Supervised k-means clustering is used here. Again the goal is NOT to determine the number of row or column clusters here.*
+
+```{r visualization Heatmap, echo=TRUE}
+
+#Use the top5K features (genes) which normalized by its mean value for each row and visualize as a Heatmap
+#Kmeans here
+Heatmap(TCGA_only_f1_prot_QN_l2_m_5K,
+        col = colorRamp2(c(-2, 0, 2),c("purple", "#EEEEEE", "yellow")),
+        show_column_names = F, show_row_names = F,
+        cluster_columns = T,cluster_rows = T,
+        show_column_dend = T, show_row_dend = T,
+        clustering_distance_rows = "pearson", clustering_distance_columns = "pearson",
+        show_heatmap_legend =T,
+        row_km = 8, column_km = 4
+        )
+```
+
+*Unsupervised Hierarchical clustering is used here*
+``` {r Hierarchical, echo=TRUE}
+
+#Hierarchical and unsupervised clustering
+Heatmap(TCGA_only_f1_prot_QN_l2_m_5K,
+        col = colorRamp2(c(-2, 0, 2),c("blue", "#EEEEEE", "orange")),
+        show_column_names = F, show_row_names = F,
+        cluster_columns = T,cluster_rows = T,
+        show_column_dend = T, show_row_dend = T,
+        clustering_distance_rows = "pearson", clustering_distance_columns = "pearson",
+        show_heatmap_legend =T
+        )
+
+```
