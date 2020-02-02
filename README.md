@@ -24,4 +24,4 @@ Therefore, we are going to divide these patients into cohorts/clusters/segments 
 
 ## Exploring Machine learning methods using Python's sklearn and further visualize them using matplotlib 
 
-[view the code here for python's sklearn machine learning workflow](https://tejaswiiyyanki.github.io/Code-Examples/Machine-Learning-with-python-sklearn.html)
+[View the code here for python's sklearn machine learning workflow](https://tejaswiiyyanki.github.io/Code-Examples/Machine-Learning-with-python-sklearn.html)
