@@ -19,4 +19,4 @@ For a personalized healthcare, we often need to treat each patient's disease as 
 
 Therefore, we are going to divide these patients into cohorts/clusters/segments that will allow us to discover new features that may be clinically relevant in this excercise.
 
-... Coming soon!
+[View the code for Unsupervised analysis using R here](https://tejaswiiyyanki.github.io/Code-Examples/Unsupervised-Exploratory-Analysis-Patient-segments.html). 
