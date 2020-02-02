@@ -1,0 +1,208 @@
+---
+title: "Unsupervised Exploratory Analysis of TCGA BRCA Patient Segments"
+author: "Tejaswi S Iyyanki"
+date: "2/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r silent calling libraries, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+require("preprocessCore")
+library(TCGAbiolinks)
+library(SummarizedExperiment)
+
+#library(devtools)
+library(ggfortify)
+library(ggplot2)
+library(ConsensusClusterPlus)
+```
+
+
+```{r Open data and process, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+
+geneExp_T=read.csv(file = "../TCGA_BRCA_Tumor_RSEM_GeneExp.tsv", header = T, sep = "\t", as.is = T, row.names = NULL)
+
+geneExp_T[1:5,1:5]
+
+geneExp_T_m=as.matrix(geneExp_T[,2:ncol(geneExp_T)])
+rownames(geneExp_T_m)=geneExp_T$row.names
+
+#Now it is a matrix format
+geneExp_T_m[1:5,1:5]
+
+#Size of matrix
+dim(geneExp_T_m)
+
+#Filter out Protein-coding genes
+ENSEMBL_annotations=read.csv("Homo_sapiens.GRCh37.87_Annotations.txt",
+                             header=FALSE,sep=" ",stringsAsFactors = F)
+ENSEMBL_annotations_prot=unique(ENSEMBL_annotations[ENSEMBL_annotations$V3=="protein_coding",])
+
+geneExp_T_m_prot=subset(geneExp_T_m,rownames(geneExp_T_m) %in% ENSEMBL_annotations_prot$V2)
+#Now we have gene matrix (rows) consisting of protein-coding ONLY
+dim(geneExp_T_m_prot)
+head(geneExp_T_m_prot)[,1:5]
+
+```
+
+
+```{r Filter Data, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+
+#Remove <2 TPM genes; Only retain rows (genes) that show atleast 20% of columns (patients) have TPM values > 2.
+TCGA_only_f1=geneExp_T_m_prot
+TCGA_only_f1=geneExp_T_m_prot[(rowSums(geneExp_T_m_prot>2)>=as.integer(0.2*ncol(geneExp_T_m_prot))),] 
+dim(TCGA_only_f1) 
+TCGA_only_f1[1:5,1:5]
+
+#Quantile Normalize data
+TCGA_only_f1_prot_QN=normalize.quantiles(TCGA_only_f1)
+row.names(TCGA_only_f1_prot_QN)=row.names(TCGA_only_f1)
+colnames(TCGA_only_f1_prot_QN)=colnames(TCGA_only_f1)
+TCGA_only_f1_prot_QN[1:5,1:5]
+
+#Log2 transform data
+TCGA_only_f1_prot_QN_l2=log2(TCGA_only_f1_prot_QN+1)
+TCGA_only_f1_prot_QN_l2[1:5,1:5]
+
+#Mean-normalize matrix
+TCGA_only_f1_prot_QN_l2_m=TCGA_only_f1_prot_QN_l2-apply(TCGA_only_f1_prot_QN_l2,1,mean)
+TCGA_only_f1_prot_QN_l2_m[1:5,1:5]
+
+#Get top5K variable genes
+var_TCGA_only=apply(TCGA_only_f1_prot_QN_l2, 1, var)
+TCGA_only_f1_prot_QN_l2_5K=TCGA_only_f1_prot_QN_l2[order(var_TCGA_only, decreasing=TRUE)[1:5000],]
+TCGA_only_f1_prot_QN_l2_m_5K=TCGA_only_f1_prot_QN_l2_m[order(var_TCGA_only, decreasing=TRUE)[1:5000],]
+
+#Most variable genes (top 25)
+sort(var_TCGA_only, decreasing=TRUE)[1:25]
+```
+
+*Supervised k-means clustering is used here. Again the goal is NOT to determine the number of row or column clusters here.*
+
+```{r visualization Heatmap, echo=TRUE}
+
+#Use the top5K features (genes) which normalized by its mean value for each row and visualize as a Heatmap
+#Kmeans here
+Heatmap(TCGA_only_f1_prot_QN_l2_m_5K,
+        col = colorRamp2(c(-2, 0, 2),c("purple", "#EEEEEE", "yellow")),
+        show_column_names = F, show_row_names = F,
+        cluster_columns = T,cluster_rows = T,
+        show_column_dend = T, show_row_dend = T,
+        clustering_distance_rows = "pearson", clustering_distance_columns = "pearson",
+        show_heatmap_legend =T,
+        row_km = 8, column_km = 4
+        )
+```
+
+*Unsupervised Hierarchical clustering is used here*
+``` {r Hierarchical, echo=TRUE}
+
+#Hierarchical and unsupervised clustering
+Heatmap(TCGA_only_f1_prot_QN_l2_m_5K,
+        col = colorRamp2(c(-2, 0, 2),c("blue", "#EEEEEE", "orange")),
+        show_column_names = F, show_row_names = F,
+        cluster_columns = T,cluster_rows = T,
+        show_column_dend = T, show_row_dend = T,
+        clustering_distance_rows = "pearson", clustering_distance_columns = "pearson",
+        show_heatmap_legend =T
+        )
+
+```
+
+## Kmeans clustering and PCA plot to visualize patient segments 
+
+```{r PCA,echo=TRUE}
+
+
+PLOTPCA_PRCOMP=function(inputM,clus) {
+    data_in=t(
+                inputM
+                )
+    res.pca=prcomp(data_in,
+                    center = TRUE,scale. = TRUE)
+    df_data_in=as.data.frame(data_in)
+    df_data_in$clus=clus
+    #Now plot PCA
+    autoplot(res.pca,data =df_data_in,colour="clus",label=F,title=paste(topNgenes))
+}
+
+#As you can see colnames have changed from "-" to "."
+colnames(TCGA_only_f1_prot_QN_l2_5K)[1:5]
+
+#So convert this according to this code:
+colnms=unlist(lapply(colnames(TCGA_only_f1_prot_QN_l2_5K),function(x) paste((strsplit(x, "[.]"))[[1]],collapse="-") ) )
+colnms[1:5]
+
+dtm=TCGA_only_f1_prot_QN_l2_5K
+colnames(dtm)=colnms
+        
+KM_clus_cols=kmeans(t(dtm), 4)
+
+#Notice that we are using 5,000 features. Hence the PC1 and PC2 (%) that can describe the data is small.
+#As we can see there is not a reliable way to know the total number of patient segments in exploratory analysis
+PLOTPCA_PRCOMP(inputM=dtm,clus = as.character(KM_clus_cols$cluster) )
+
+```
+
+## Lets get some help from statistics to know the number of clusters
+**Consensus cluster package allows us to discover the robust number of segments in an unsupervised setting **
+```{r consensus clustering,echo=TRUE}
+
+results = ConsensusClusterPlus(dtm,maxK=8,reps=100,pItem=0.8,pFeature=1,
+                               clusterAlg="hc",distance="pearson",seed=25)
+
+```
+**This gives us a bunch of plots that shows how the cumulative distributive function and the area under the curve increases upto k=4 clusters beyond which it falls off; We can conclude that k=4 gives us robust number of clusters to work with going forward**
+## Use Kaplan Meier plot to define clinically relevant population segments
+``` {r KMplot, echo=TRUE}
+
+clinical_patient_Cancer <- GDCquery_clinic("TCGA-BRCA","clinical")
+ #clinical_patient_Cancer <- data.frame(
+ #     bcr_patient_barcode = substr(colnms,1,12)
+ #)
+ 
+clinical_patient_Cancer1=clinical_patient_Cancer
+clinical_patient_Cancer1$clus=as.vector(KM_clus_cols$cluster)[
+                                (match(clinical_patient_Cancer$submitter_id,substr(colnms,1,12)))
+                                ]
+ 
+ 
+TCGAanalyze_survival(clinical_patient_Cancer1,
+                     clusterCol="clus",
+                     risk.table = F,
+                     xlim = c(100,6000),
+                     conf.int = FALSE,
+                     color = c("Dark2"),
+                     filename = NULL
+                     )
+ 
+```
+
+## Since Cluster 4 does poor than Cluster 3. We can do statistics on genes (features) that is significantly associated with this cluster
+**To do this, we use Kaplan-meier (KM) survival analysis - a univariate analysis; Each gene at a time is systematically used to separate patients with high/low expression and compared against the two groups of clusters**
+
+```{r Genes for KMplot, echo=TRUE}
+
+ 
+tabSurvKM <- TCGAanalyze_SurvivalKM(clinical_patient_Cancer,
+                                     dtm,
+                                     Genelist = rownames(dtm),
+                                     Survresult = FALSE,
+                                     p.cut = 0.4,
+                                     ThreshTop = 0.7,
+                                     ThreshDown = 0.2,
+                                     group1 = names(KM_clus_cols$cluster==3), 
+                                     group2 = names(KM_clus_cols$cluster==4)
+                                    ) 
+
+#Top 20 Genes - ranked by pvalue
+tabSurvKM[1:20,]
+
+ 
+```
