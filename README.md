@@ -1,5 +1,6 @@
 # Welcome to Tejaswi Iyyanki GitHub pages
 
+#### Here I will be using Rmarkdown outputs and python's jupyter notebook outputs to showcase my data science skills
 
 ## Download The cancer genome atlas (TCGA) RNASeq Data for Breast cancer cohort using R
 
@@ -20,3 +21,7 @@ For a personalized healthcare, we often need to treat each patient's disease as 
 Therefore, we are going to divide these patients into cohorts/clusters/segments that will allow us to discover new features that may be clinically relevant in this excercise.
 
 [View the code for Unsupervised analysis using R here](https://tejaswiiyyanki.github.io/Code-Examples/Unsupervised-Exploratory-Analysis-Patient-segments.html). 
+
+## Exploring Machine learning methods using Python's sklearn and further visualize them using matplotlib 
+
+[View the code here for python's sklearn machine learning workflow](https://tejaswiiyyanki.github.io/Code-Examples/Machine-Learning-with-python-sklearn.html)
